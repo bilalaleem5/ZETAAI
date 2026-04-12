@@ -1,0 +1,59 @@
+appId: com.zetaai.app
+productName: ZETA AI
+copyright: Copyright © 2025 bilalaleem5
+
+directories:
+  buildResources: resources
+
+files:
+  - '!**/.vscode/*'
+  - '!src/*'
+  - '!electron.vite.config.{js,ts,mjs,cjs}'
+  - '!{.eslintignore,.eslintrc.cjs,.prettierignore,.prettierrc.yaml,dev-app-update.yml,CHANGELOG.md,RELEASES.md}'
+  - '!{.env,.env.*,.nvmrc,.node-version}'
+  - '!{tsconfig.json,tsconfig.node.json,tsconfig.web.json}'
+  - '!{tailwind.config.js,postcss.config.js}'
+
+asarUnpack:
+  - resources/**
+
+win:
+  executableName: ZetaAI
+  icon: resources/icon.ico
+
+nsis:
+  artifactName: ${name}-${version}-setup.${ext}
+  shortcutName: ${productName}
+  uninstallDisplayName: ${productName}
+  createDesktopShortcut: always
+
+mac:
+  entitlementsInherit: build/entitlements.mac.plist
+  extendInfo:
+    - NSCameraUsageDescription: Application requests access to the camera.
+    - NSMicrophoneUsageDescription: Application requests access to the microphone.
+    - NSDocumentsFolderUsageDescription: Application requests access to Documents.
+    - NSDownloadsFolderUsageDescription: Application requests access to Downloads.
+  notarize: false
+  icon: resources/icon.icns
+
+dmg:
+  artifactName: ${name}-${version}.${ext}
+
+linux:
+  target:
+    - AppImage
+    - snap
+    - deb
+  maintainer: bilalaleem5
+  category: Utility
+  icon: resources/icon.png
+
+appImage:
+  artifactName: ${name}-${version}.${ext}
+
+npmRebuild: false
+
+publish:
+  provider: generic
+  url: https://example.com/auto-updates

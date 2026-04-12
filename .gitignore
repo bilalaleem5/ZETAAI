@@ -1,0 +1,47 @@
+# Dependencies
+node_modules/
+.pnp
+.pnp.js
+
+# Build outputs
+dist/
+out/
+build/mac-arm64-unpacked/
+build/mac-unpacked/
+build/win-unpacked/
+build/linux-unpacked/
+*.snap
+
+# Environment
+.env
+.env.local
+.env.*.local
+
+# Electron
+app-update.yml
+
+# Editor
+.vscode/settings.json
+.idea/
+*.swp
+*.swo
+.DS_Store
+
+# Logs
+logs/
+*.log
+npm-debug.log*
+yarn-debug.log*
+yarn-error.log*
+
+# Cache
+.eslintcache
+.prettier_cache
+*.tsbuildinfo
+
+# Test coverage
+coverage/
+
+# Temp files
+tmp/
+temp/
