@@ -30,8 +30,7 @@ export async function handleOsControl(
     switch (action) {
       case 'mouse-move': {
         // Dynamic import to avoid bundling issues
-        const { mouse, Point } = await import('@nut-tree-fork/nut-js')
-        await mouse.setPosition(new Point(payload.x ?? 0, payload.y ?? 0))
+        const { mouse, Point } = await import('@nut-tree-fork/nut-js')        await mouse.setPosition(new Point(payload.x ?? 0, payload.y ?? 0))
         return { success: true }
       }
 

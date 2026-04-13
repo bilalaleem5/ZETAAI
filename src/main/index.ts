@@ -3,7 +3,8 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { config } from 'dotenv'
 import { registerAllIpcHandlers } from './ipc'
-import Store from 'electron-store'
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Store = require('electron-store')
 
 // Load environment variables
 config()

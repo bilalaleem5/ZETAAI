@@ -32,7 +32,7 @@ export async function handleWebIntelligence(
   try {
     switch (action) {
       case 'search': {
-        // Use Tavily API if key available, else fallback to DuckDuckGo
+        // Use Tavily API if key available, else fallback to DuckDuckGo scrape
         const tavilyKey = process.env.TAVILY_API_KEY
         if (tavilyKey && tavilyKey !== 'your_tavily_api_key_here') {
           const res = await fetch('https://api.tavily.com/search', {

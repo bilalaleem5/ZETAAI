@@ -1,5 +1,8 @@
 import { safeStorage } from 'electron'
-import { store } from '../../index'
+// electron-store v8 uses require
+// eslint-disable-next-line @typescript-eslint/no-var-requires
+const Store = require('electron-store')
+const store = new Store({ name: 'zeta-vault', encryptionKey: 'zeta-secure-key-v1' })
 
 type VaultAction = 'set' | 'get' | 'delete' | 'list'
 
