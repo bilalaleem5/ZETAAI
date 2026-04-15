@@ -4,7 +4,6 @@ import { WebIntelligenceAgent } from '../../agents/webAgent'
 import { RAGMemoryAgent } from '../../agents/ragAgent'
 import { WebsiteBuilderAgent } from '../../agents/websiteBuilderAgent'
 import { OrchestratorAgent } from '../../agents/orchestratorAgent'
-import { ConversationAgent } from '../../agents/conversationAgent'
 
 export interface AgentPayload {
   message: string
@@ -35,7 +34,7 @@ export async function handleAgentChat(
       case 'web':     result = await WebIntelligenceAgent.run({ message, model, history: conversationHistory, onToken: sendToken }); break
       case 'rag':     result = await RAGMemoryAgent.run({ message, model, history: conversationHistory, onToken: sendToken }); break
       case 'builder': result = await WebsiteBuilderAgent.run({ message, model, history: conversationHistory, onToken: sendToken }); break
-      case 'chat':    result = await ConversationAgent.run({ message, model, history: conversationHistory, onToken: sendToken }); break
+      case 'chat':
       default:
         result = await OrchestratorAgent.run({ message, model, history: conversationHistory, context: context || {}, onToken: sendToken })
         break
@@ -49,12 +48,18 @@ export async function handleAgentChat(
     console.error('[AgentHandler]', raw.slice(0, 200))
 
     let msg = '⚠️ Error occurred.'
-    if (raw.includes('not set') || raw.includes('GROQ_API_KEY')) msg = '🔑 Add GROQ_API_KEY in VAULT'
-    else if (raw.includes('401') || raw.includes('invalid'))     msg = '🔑 Invalid Groq key. Update in VAULT.'
-    else if (raw.includes('429') || raw.includes('rate'))        msg = '⏳ Rate limited. Wait a moment.'
+    if (raw.includes('not set') || raw.includes('GROQ_API_KEY')) {
+      msg = '🔑 Add GROQ_API_KEY in VAULT'
+    } else if (raw.includes('401') || raw.includes('invalid') || raw.includes('unauthorized')) {
+      // It's possible that an external API (like weather) threw 401, but usually it's the Groq SDK
+      msg = '🔑 Warning: API Key issues. Ensure Groq Key in VAULT is valid.'
+    } else if (raw.includes('429') || raw.includes('rate')) {
+      msg = '⏳ Rate limited. Wait a moment before next command.'
+    }
 
     sendToken(msg)
-    sendDone()  // ALWAYS fires
+    // Add artificial delay before sendDone so the UI can process the text and trigger the TTS sequence properly
+    setTimeout(() => sendDone(), 200)
     return { success: false, error: msg }
   }
 }

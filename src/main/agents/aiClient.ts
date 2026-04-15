@@ -9,6 +9,7 @@ export interface StreamOptions {
   onToken?: (token: string) => void
   maxTokens?: number
   temperature?: number
+  responseFormat?: { type: 'json_object' } | { type: 'text' }
 }
 
 const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'mixtral-8x7b-32768']
@@ -19,7 +20,7 @@ export async function streamAIResponse(options: StreamOptions): Promise<string> 
     throw new Error('GROQ_API_KEY not set. Open VAULT and add your key from console.groq.com')
   }
 
-  const { systemPrompt, messages, onToken, maxTokens = 2048, temperature = 0.7 } = options
+  const { systemPrompt, messages, onToken, maxTokens = 2048, temperature = 0.7, responseFormat } = options
   const groq = new Groq({ apiKey })
 
   for (const modelName of GROQ_MODELS) {
@@ -32,6 +33,7 @@ export async function streamAIResponse(options: StreamOptions): Promise<string> 
         ],
         max_tokens: maxTokens,
         temperature,
+        response_format: responseFormat,
         stream: true
       })
       let full = ''
