@@ -2,7 +2,7 @@ import { create } from 'zustand'
 import { persist } from 'zustand/middleware'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
-export type AgentMode = 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os'
+export type AgentMode = 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os' | 'chat'
 export type AIModel = 'gemini' | 'groq'
 
 export interface Message {
@@ -161,7 +161,7 @@ interface SettingsState {
 export const useSettingsStore = create<SettingsState>()(
   persist(
     (set) => ({
-      model: 'gemini',
+      model: 'groq',
       agentMode: 'auto',
       sidebarOpen: true,
       settingsOpen: false,

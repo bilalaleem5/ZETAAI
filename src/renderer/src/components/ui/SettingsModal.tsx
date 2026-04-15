@@ -34,6 +34,20 @@ const API_KEYS: ApiKey[] = [
     placeholder: 'tvly-...',
     hint: 'Optional — enables deep web research in Web Agent',
     link: 'https://app.tavily.com'
+  },
+  {
+    key: 'OPENWEATHER_API_KEY',
+    label: 'OpenWeather API Key',
+    placeholder: 'abc123...',
+    hint: 'Optional — free fallback (wttr.in) works without key',
+    link: 'https://openweathermap.org/api'
+  },
+  {
+    key: 'GNEWS_API_KEY',
+    label: 'GNews API Key',
+    placeholder: 'abc123...',
+    hint: 'Optional — free fallback (BBC RSS) works without key',
+    link: 'https://gnews.io'
   }
 ]
 

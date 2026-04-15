@@ -1,29 +1,26 @@
 import screenshot from 'screenshot-desktop'
-import Tesseract from 'tesseract.js'
 
 type ScreenAction = 'screenshot' | 'ocr'
 
-interface ScreenPayload {
-  imagePath?: string
-}
-
 export async function handleScreenCapture(
   action: ScreenAction,
-  payload?: ScreenPayload
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  _payload?: unknown
 ): Promise<{ success: boolean; data?: unknown; error?: string }> {
   try {
     switch (action) {
       case 'screenshot': {
         const imgBuffer = await screenshot({ format: 'png' })
-        const base64 = imgBuffer.toString('base64')
+        const base64 = (imgBuffer as Buffer).toString('base64')
         return { success: true, data: `data:image/png;base64,${base64}` }
       }
 
       case 'ocr': {
-        // Capture screen then run OCR
         const imgBuffer = await screenshot({ format: 'png' })
-        const result = await Tesseract.recognize(imgBuffer, 'eng', {
-          logger: () => {} // Silence verbose logs
+        // Dynamic import Tesseract to avoid bundling issues
+        const Tesseract = (await import('tesseract.js')).default
+        const result = await Tesseract.recognize(imgBuffer as Buffer, 'eng', {
+          logger: () => {}
         })
         return { success: true, data: result.data.text }
       }

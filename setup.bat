@@ -1,56 +1,52 @@
 @echo off
 title ZETA AI — Setup
-color 0D
 echo.
-echo  ========================================
-echo   ZETA AI — Autonomous OS Intelligence
-echo  ========================================
+echo  ╔═══════════════════════════════════════╗
+echo  ║        ZETA AI — Setup Script         ║
+echo  ║    Voice AI OS Assistant v2.0         ║
+echo  ╚═══════════════════════════════════════╝
 echo.
 
-:: Check Node.js
-node --version >nul 2>&1
+where node >nul 2>nul
 if %errorlevel% neq 0 (
-    echo [ERROR] Node.js not found!
-    echo Please install Node.js 18+ from https://nodejs.org
-    pause
-    exit /b 1
+    echo [ERROR] Node.js not found. Download from https://nodejs.org
+    pause & exit /b 1
+)
+for /f "tokens=1,2,3 delims=." %%a in ('node -v') do (
+    set NODE_MAJOR=%%a
+    set NODE_MAJOR=!NODE_MAJOR:~1!
 )
 
-echo [OK] Node.js found: 
-node --version
+echo [1/4] Installing dependencies...
+call npm install
+if %errorlevel% neq 0 ( echo [ERROR] npm install failed & pause & exit /b 1 )
 
-:: Check npm
-npm --version >nul 2>&1
-if %errorlevel% neq 0 (
-    echo [ERROR] npm not found!
-    pause
-    exit /b 1
-)
-
-echo [OK] npm found:
-npm --version
-echo.
-
-:: Install dependencies
-echo [*] Installing dependencies (this takes 2-3 minutes)...
-echo.
-npm install --legacy-peer-deps
-if %errorlevel% neq 0 (
+if not exist ".env" (
+    echo [2/4] Creating .env from template...
+    copy .env.example .env
     echo.
-    echo [ERROR] npm install failed. Trying with --force...
-    npm install --force
+    echo  ┌─────────────────────────────────────────┐
+    echo  │  ACTION REQUIRED: Add your API keys     │
+    echo  │                                         │
+    echo  │  1. Open .env in any text editor        │
+    echo  │  2. Add GEMINI_API_KEY (free):          │
+    echo  │     https://aistudio.google.com/app/apikey
+    echo  │                                         │
+    echo  │  OR add GROQ_API_KEY (free):            │
+    echo  │     https://console.groq.com            │
+    echo  │                                         │
+    echo  │  Weather + News work WITHOUT any key    │
+    echo  └─────────────────────────────────────────┘
+    echo.
+    echo Press any key to open .env for editing...
+    pause >nul
+    notepad .env
+) else (
+    echo [2/4] .env already exists — skipping
 )
 
+echo [3/4] Setup complete!
 echo.
-echo  ========================================
-echo   Setup Complete! Starting ZETA AI...
-echo  ========================================
+echo [4/4] Starting ZETA AI...
 echo.
-echo  When the app opens:
-echo    1. Click VAULT in the title bar
-echo    2. Add your GEMINI_API_KEY
-echo    3. Add your GROQ_API_KEY
-echo    4. Start chatting!
-echo.
-pause
 npm run dev

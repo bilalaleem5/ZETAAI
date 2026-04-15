@@ -1,10 +1,8 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 
-// Expose Electron APIs to renderer
 contextBridge.exposeInMainWorld('electron', electronAPI)
 
-// ─── ZETA AI API Surface ──────────────────────────────────────────────────────
 const zetaAPI = {
   // ── Window Controls ──────────────────────────────────────────────────────
   window: {
@@ -38,6 +36,11 @@ const zetaAPI = {
     }
   },
 
+  // ── Audio STT ────────────────────────────────────────────────────────────
+  audio: {
+    transcribe: (base64Audio: string) => ipcRenderer.invoke('audio:transcribe', { base64Audio })
+  },
+
   // ── OS Control ───────────────────────────────────────────────────────────
   os: {
     mouseMove: (x: number, y: number) => ipcRenderer.invoke('os:mouse-move', { x, y }),
@@ -48,6 +51,12 @@ const zetaAPI = {
       ipcRenderer.invoke('os:scroll', { direction, amount }),
     listWindows: () => ipcRenderer.invoke('os:list-windows'),
     focusWindow: (windowTitle: string) => ipcRenderer.invoke('os:focus-window', { windowTitle })
+  },
+
+  // ── App Launcher ─────────────────────────────────────────────────────────
+  app: {
+    open: (name: string) => ipcRenderer.invoke('app:open', { name }),
+    close: (name: string) => ipcRenderer.invoke('app:close', { name })
   },
 
   // ── File System ──────────────────────────────────────────────────────────
@@ -89,12 +98,42 @@ const zetaAPI = {
       ipcRenderer.invoke('rag:ingest', payload),
     query: (query: string, topK?: number) => ipcRenderer.invoke('rag:query', { query, topK }),
     clear: () => ipcRenderer.invoke('rag:clear')
+  },
+
+  // ── Weather ──────────────────────────────────────────────────────────────
+  weather: {
+    current: (city?: string) => ipcRenderer.invoke('weather:current', { city }),
+    forecast: (city?: string) => ipcRenderer.invoke('weather:forecast', { city })
+  },
+
+  // ── News ─────────────────────────────────────────────────────────────────
+  news: {
+    headlines: (category?: string) => ipcRenderer.invoke('news:headlines', { category }),
+    search: (query: string) => ipcRenderer.invoke('news:search', { query })
+  },
+
+  // ── Calendar ─────────────────────────────────────────────────────────────
+  calendar: {
+    list: () => ipcRenderer.invoke('calendar:list'),
+    add: (event: { title: string; date: string; time?: string; description?: string }) =>
+      ipcRenderer.invoke('calendar:add', { event }),
+    delete: (id: string) => ipcRenderer.invoke('calendar:delete', { id }),
+    today: () => ipcRenderer.invoke('calendar:today'),
+    upcoming: (days?: number) => ipcRenderer.invoke('calendar:upcoming', { days })
+  },
+
+  // ── Reminders ────────────────────────────────────────────────────────────
+  reminder: {
+    list: () => ipcRenderer.invoke('reminder:list'),
+    add: (text: string, datetime: string) => ipcRenderer.invoke('reminder:add', { text, datetime }),
+    complete: (id: string) => ipcRenderer.invoke('reminder:complete', { id }),
+    delete: (id: string) => ipcRenderer.invoke('reminder:delete', { id }),
+    upcoming: () => ipcRenderer.invoke('reminder:upcoming')
   }
 }
 
 contextBridge.exposeInMainWorld('zeta', zetaAPI)
 
-// Type declarations for TypeScript
 declare global {
   interface Window {
     zeta: typeof zetaAPI

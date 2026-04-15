@@ -29,8 +29,8 @@ export async function handleOsControl(
   try {
     switch (action) {
       case 'mouse-move': {
-        // Dynamic import to avoid bundling issues
-        const { mouse, Point } = await import('@nut-tree-fork/nut-js')        await mouse.setPosition(new Point(payload.x ?? 0, payload.y ?? 0))
+        const { mouse, Point } = await import('@nut-tree-fork/nut-js')
+        await mouse.setPosition(new Point(payload.x ?? 0, payload.y ?? 0))
         return { success: true }
       }
 
@@ -74,11 +74,8 @@ export async function handleOsControl(
       }
 
       case 'scroll': {
-        const { mouse, Point, ScrollDirection } = await import('@nut-tree-fork/nut-js')
-        const pos = await mouse.getPosition()
-        await mouse.setPosition(new Point(pos.x, pos.y))
-        const dir =
-          payload.direction === 'up' ? ScrollDirection.UP : ScrollDirection.DOWN
+        const { mouse, ScrollDirection } = await import('@nut-tree-fork/nut-js')
+        const dir = payload.direction === 'up' ? ScrollDirection.UP : ScrollDirection.DOWN
         await mouse.scroll(dir, payload.amount ?? 3)
         return { success: true }
       }
@@ -106,9 +103,7 @@ export async function handleOsControl(
             `powershell -command "Add-Type -AssemblyName Microsoft.VisualBasic; [Microsoft.VisualBasic.Interaction]::AppActivate('${payload.windowTitle}')"`
           )
         } else if (process.platform === 'darwin') {
-          await execAsync(
-            `osascript -e 'tell application "${payload.windowTitle}" to activate'`
-          )
+          await execAsync(`osascript -e 'tell application "${payload.windowTitle}" to activate'`)
         } else {
           await execAsync(`wmctrl -a "${payload.windowTitle}"`)
         }

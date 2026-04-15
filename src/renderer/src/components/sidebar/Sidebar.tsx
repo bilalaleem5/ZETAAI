@@ -1,7 +1,7 @@
 import React from 'react'
 import {
   Plus, MessageSquare, Trash2, Code2, Globe, Brain,
-  Layout, Cpu, Zap, ChevronRight
+  Layout, Cpu, Zap, ChevronRight, MessageCircle
 } from 'lucide-react'
 import { useChatStore, useSettingsStore, AgentMode, AIModel } from '../../store'
 
@@ -47,6 +47,13 @@ const AGENTS: { mode: AgentMode; label: string; icon: React.ReactNode; color: st
     icon: <Cpu size={13} />,
     color: '#ef4444',
     desc: 'System automation'
+  },
+  {
+    mode: 'chat',
+    label: 'Chat Mode',
+    icon: <MessageCircle size={13} />,
+    color: '#00e5cc',
+    desc: 'Human-like conversation'
   }
 ]
 

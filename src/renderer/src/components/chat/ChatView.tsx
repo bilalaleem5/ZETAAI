@@ -19,22 +19,18 @@ export function ChatView(): React.ReactElement {
 
   return (
     <div className="flex flex-col h-full bg-[#0a0a0f]">
-      {/* Messages area */}
       <div className="flex-1 overflow-y-auto">
         {isEmpty ? (
           <WelcomeScreen onSend={sendMessage} />
         ) : (
           <div className="max-w-3xl mx-auto px-4 py-6 space-y-1">
             {messages.map((msg, idx) => (
-              <MessageBubble
-                key={msg.id}
-                message={msg}
-                isLast={idx === messages.length - 1}
-              />
+              <MessageBubble key={msg.id} message={msg} isLast={idx === messages.length - 1} />
             ))}
 
-            {/* Streaming indicator */}
-            {isStreaming && messages[messages.length - 1]?.isStreaming &&
+            {/* Typing indicator */}
+            {isStreaming &&
+              messages[messages.length - 1]?.isStreaming &&
               messages[messages.length - 1]?.content === '' && (
               <div className="flex items-start gap-3 py-3 animate-fade">
                 <div className="w-7 h-7 rounded-lg bg-[rgba(139,92,246,0.15)] border border-[rgba(139,92,246,0.3)] flex items-center justify-center flex-shrink-0 mt-1">
@@ -47,13 +43,11 @@ export function ChatView(): React.ReactElement {
                 </div>
               </div>
             )}
-
             <div ref={bottomRef} />
           </div>
         )}
       </div>
 
-      {/* Input area */}
       {!isEmpty && (
         <div className="flex-shrink-0 border-t border-[rgba(139,92,246,0.1)] bg-[#08080f]">
           <div className="max-w-3xl mx-auto px-4 py-3">
