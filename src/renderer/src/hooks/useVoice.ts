@@ -31,70 +31,82 @@ export function useVoice() {
     setVolume(0)
   }, [])
 
-  const startVol = useCallback(async (): Promise<MediaStream | null> => {
-    try {
-      const s = await navigator.mediaDevices.getUserMedia({ audio: true })
-      volStream.current = s
-      const ctx = new AudioContext()
-      volCtx.current = ctx
-      const a = ctx.createAnalyser()
-      a.fftSize = 256
-      ctx.createMediaStreamSource(s).connect(a)
-      const d = new Uint8Array(a.frequencyBinCount)
-      const tick = () => {
-        a.getByteFrequencyData(d)
-        setVolume(Math.min(d.reduce((x, y) => x + y, 0) / d.length / 60, 1))
-        volAnim.current = requestAnimationFrame(tick)
+    let silenceStart = Date.now()
+    let isTalking = false
+
+    const startVol = async (): Promise<MediaStream | null> => {
+      try {
+        const s = await navigator.mediaDevices.getUserMedia({ audio: true })
+        volStream.current = s
+        const ctx = new AudioContext()
+        volCtx.current = ctx
+        const a = ctx.createAnalyser()
+        a.fftSize = 256
+        ctx.createMediaStreamSource(s).connect(a)
+        const d = new Uint8Array(a.frequencyBinCount)
+        
+        const tick = () => {
+          a.getByteFrequencyData(d)
+          const currVol = Math.min(d.reduce((x, y) => x + y, 0) / d.length / 60, 1)
+          setVolume(currVol)
+
+          // Intelligent Silence Detection (VAD)
+          if (currVol > 0.15) {
+            isTalking = true
+            silenceStart = Date.now()
+          } else if (isTalking && (Date.now() - silenceStart > 1200)) {
+            // User was talking but has been silent for 1.2s -> Stop and process instantly!
+            if (mediaRecorderRef.current?.state === 'recording') {
+              console.log('[Voice] Silence detected, auto-stopping for fast processing.')
+              mediaRecorderRef.current.stop()
+            }
+          } else if (!isTalking && (Date.now() - silenceStart > 4000)) {
+             // User never talked at all for 4s -> abort
+             if (mediaRecorderRef.current?.state === 'recording') {
+               mediaRecorderRef.current.stop()
+             }
+          }
+          
+          volAnim.current = requestAnimationFrame(tick)
+        }
+        tick()
+        return s
+      } catch {
+        return null
       }
-      tick()
-      return s
-    } catch {
-      return null
-    }
-  }, [])
-
-  /**
-   * CRITICAL FIX: Use MediaRecorder + Groq Whisper API instead of unreliable
-   * webkitSpeechRecognition. This securely streams audio via Base64 to IPC
-   * where Groq's large-v3 transcribes it.
-   */
-  const listen = useCallback(async (onResult: (text: string) => void) => {
-    try { mediaRecorderRef.current?.stop() } catch {}
-    if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
-    
-    setTranscript('')
-    setState('listening')
-    audioChunksRef.current = []
-
-    console.log('[Voice] Requesting microphone for Whisper STT...')
-    const stream = await startVol()
-    if (!stream) {
-      console.error('[Voice] Failed to get mic stream')
-      setState('error')
-      setTimeout(() => setState('sleeping'), 2000)
-      return
     }
 
-    const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-    mediaRecorderRef.current = mr
+    const listen = useCallback(async (onResult: (text: string) => void) => {
+      try { mediaRecorderRef.current?.stop() } catch {}
+      if (silenceTimerRef.current) clearTimeout(silenceTimerRef.current)
+      
+      setTranscript('')
+      setState('listening')
+      audioChunksRef.current = []
 
-    mr.ondataavailable = (e) => {
-      if (e.data.size > 0) audioChunksRef.current.push(e.data)
-    }
+      console.log('[Voice] Requesting microphone for Whisper STT...')
+      const stream = await startVol()
+      if (!stream) {
+        console.error('[Voice] Failed to get mic stream')
+        setState('error')
+        setTimeout(() => setState('sleeping'), 2000)
+        return
+      }
 
-    mr.onstart = () => {
-      console.log('[Voice] MediaRecorder started ✅')
-      // Stop recording automatically if user says absolutely nothing for 6s
-      silenceTimerRef.current = setTimeout(() => {
-        console.log('[Voice] Silence timeout reached.')
-        if (mr.state === 'recording') mr.stop()
-      }, 6000)
-    }
+      const mr = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+      mediaRecorderRef.current = mr
 
-    // Process the audio chunk when we stop recording
-    mr.onstop = async () => {
-      console.log('[Voice] onstop: processing audio chunks...')
-      stopVol()
+      mr.ondataavailable = (e) => {
+        if (e.data.size > 0) audioChunksRef.current.push(e.data)
+      }
+
+      mr.onstart = () => {
+        console.log('[Voice] MediaRecorder started ✅')
+      }
+
+      mr.onstop = async () => {
+        console.log('[Voice] onstop: processing audio chunks...')
+        stopVol()
 
       if (audioChunksRef.current.length === 0) {
         setState('sleeping')

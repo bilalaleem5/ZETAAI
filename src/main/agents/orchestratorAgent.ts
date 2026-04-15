@@ -191,6 +191,6 @@ async function executeAction(action: { action: string; params?: Record<string, u
       return { events: evRes.data, reminders: remRes.data }
     }
     case 'WEB_SEARCH': return { error: 'WEB_SEARCH not fully implemented here yet' }
-    default: return { error: \`Unknown action: \${action.action}\` }
+    default: return { error: `Unknown action: ${action.action}` }
   }
 }
