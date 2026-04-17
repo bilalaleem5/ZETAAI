@@ -12,28 +12,26 @@ export interface StreamOptions {
   responseFormat?: { type: 'json_object' } | { type: 'text' }
 }
 
-const GROQ_MODELS = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'mixtral-8x7b-32768']
+const MODELS = ['llama-3.3-70b-versatile', 'llama3-8b-8192', 'mixtral-8x7b-32768']
 
-export async function streamAIResponse(options: StreamOptions): Promise<string> {
-  const apiKey = process.env.GROQ_API_KEY
-  if (!apiKey || apiKey.length < 10) {
-    throw new Error('GROQ_API_KEY not set. Open VAULT and add your key from console.groq.com')
-  }
+export async function streamAIResponse(opts: StreamOptions): Promise<string> {
+  const key = (process.env.GROQ_API_KEY || '').trim()
+  if (!key || key.length < 20) throw new Error('GROQ_API_KEY not configured')
 
-  const { systemPrompt, messages, onToken, maxTokens = 2048, temperature = 0.7, responseFormat } = options
-  const groq = new Groq({ apiKey })
+  const groq = new Groq({ apiKey: key })
+  const { systemPrompt, messages, onToken, maxTokens = 2048, temperature = 0.7, responseFormat } = opts
 
-  for (const modelName of GROQ_MODELS) {
+  for (const model of MODELS) {
     try {
       const stream = await groq.chat.completions.create({
-        model: modelName,
+        model,
         messages: [
           { role: 'system', content: systemPrompt },
           ...messages.map(m => ({ role: m.role as 'user' | 'assistant', content: m.content }))
         ],
         max_tokens: maxTokens,
         temperature,
-        response_format: responseFormat,
+        ...(responseFormat ? { response_format: responseFormat } : {}),
         stream: true
       })
       let full = ''
@@ -41,20 +39,16 @@ export async function streamAIResponse(options: StreamOptions): Promise<string> 
         const t = chunk.choices[0]?.delta?.content ?? ''
         if (t) { full += t; onToken?.(t) }
       }
-      console.log(`[AI] ✅ Groq ${modelName}`)
+      console.log(`[AI] ✅ ${model}`)
       return full
-    } catch (err) {
-      const msg = String(err)
-      if (msg.includes('429') || msg.includes('rate')) {
-        console.warn(`[AI] ${modelName} rate limited, trying next...`)
-        continue
-      }
-      throw err
+    } catch (e) {
+      const msg = String(e)
+      if (msg.includes('401') || msg.includes('Invalid') || msg.includes('Unauthorized')) throw e
+      if (msg.includes('429') || msg.includes('rate')) { console.warn(`[AI] ${model} rate limited`); continue }
+      throw e
     }
   }
-  throw new Error('All Groq models unavailable. Please try again in a moment.')
+  throw new Error('All Groq models unavailable')
 }
 
-export async function callAI(options: Omit<StreamOptions, 'onToken'>): Promise<string> {
-  return streamAIResponse({ ...options, onToken: undefined })
-}
+export const callAI = (opts: Omit<StreamOptions, 'onToken'>) => streamAIResponse({ ...opts })

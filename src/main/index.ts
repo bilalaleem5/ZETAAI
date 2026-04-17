@@ -4,44 +4,39 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { config } from 'dotenv'
 import { registerAllIpcHandlers } from './ipc/index'
 
-// ─── CRITICAL FIX: SSL certificate errors block SpeechRecognition ──────────
-// Chrome uses Google servers for SpeechRecognition - SSL must be allowed
+// ─── MUST be before app.whenReady() ──────────────────────────────────────────
+// SSL errors block Chrome SpeechRecognition (connects to Google's servers)
 app.commandLine.appendSwitch('ignore-certificate-errors')
 app.commandLine.appendSwitch('ignore-ssl-errors')
-app.commandLine.appendSwitch('disable-web-security', 'false')
-// ────────────────────────────────────────────────────────────────────────────
+app.commandLine.appendSwitch('allow-running-insecure-content')
+// ─────────────────────────────────────────────────────────────────────────────
 
-
-// Load environment variables
 config()
 
-// Pre-load vault keys into process.env at startup
 function preloadVaultKeys(): void {
   try {
     // eslint-disable-next-line @typescript-eslint/no-var-requires
     const Store = require('electron-store')
     const store = new Store({ name: 'zeta-vault', encryptionKey: 'zeta-secure-key-v1' })
-    const VAULT_PREFIX = 'vault:'
-    const allKeys = Object.keys(store.store as Record<string, unknown>).filter(
-      (k: string) => k.startsWith(VAULT_PREFIX) && !k.endsWith(':encrypted')
-    )
-    for (const storeKey of allKeys) {
-      const keyName = storeKey.replace(VAULT_PREFIX, '')
+    const PREFIX = 'vault:'
+    const keys = Object.keys(store.store as Record<string, unknown>)
+      .filter((k: string) => k.startsWith(PREFIX) && !k.endsWith(':encrypted'))
+    for (const storeKey of keys) {
+      const keyName = storeKey.replace(PREFIX, '')
       const raw = store.get(storeKey) as string | undefined
       if (!raw) continue
-      const isEncrypted = store.get(`${storeKey}:encrypted`) as boolean
-      if (isEncrypted && safeStorage.isEncryptionAvailable()) {
+      const encrypted = store.get(`${storeKey}:encrypted`) as boolean
+      if (encrypted && safeStorage.isEncryptionAvailable()) {
         try {
-          const decrypted = safeStorage.decryptString(Buffer.from(raw, 'base64'))
-          process.env[keyName.toUpperCase()] = decrypted
-        } catch { /* skip */ }
+          process.env[keyName.toUpperCase()] = safeStorage.decryptString(Buffer.from(raw, 'base64'))
+        } catch { process.env[keyName.toUpperCase()] = raw }
       } else {
         process.env[keyName.toUpperCase()] = raw
       }
     }
-    console.log('[Vault] Preloaded keys:', allKeys.map(k => k.replace(VAULT_PREFIX, '')).join(', ') || 'none')
+    console.log('[Vault] Keys loaded:', keys.map(k => k.replace(PREFIX, '')).join(', ') || 'none')
   } catch (e) {
-    console.error('[Vault] Preload error:', e)
+    console.error('[Vault] Error:', e)
   }
 }
 
@@ -56,17 +51,17 @@ function createWindow(): void {
     minWidth: 1100,
     minHeight: 700,
     show: false,
+    autoHideMenuBar: true,
     frame: false,
     titleBarStyle: 'hidden',
-    backgroundColor: '#0a0a0f',
-    autoHideMenuBar: true,
-    ...(process.platform === 'linux' ? { icon: join(__dirname, '../../resources/icon.png') } : {}),
+    backgroundColor: '#000d0d',
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
       sandbox: false,
-      contextIsolation: true,
+      webSecurity: false,          // allows SpeechRecognition in Electron
+      allowRunningInsecureContent: true,
       nodeIntegration: false,
-      webSecurity: false
+      contextIsolation: true,
     }
   })
 
@@ -79,32 +74,6 @@ function createWindow(): void {
     return { action: 'deny' }
   })
 
-  // Register all IPC handlers
-  registerAllIpcHandlers(ipcMain, mainWindow)
-
-  // ─── CRITICAL FIX: Auto-grant media and mic permissions ──────────
-  mainWindow.webContents.session.setPermissionCheckHandler(() => true)
-  mainWindow.webContents.session.setPermissionRequestHandler((_webContents, permission, callback) => {
-    // Grant text-to-speech, camera, mic, and media
-    if (permission === 'media' || permission === 'mediaKeySystem') {
-      return callback(true)
-    }
-    callback(true)
-  })
-  // ─────────────────────────────────────────────────────────────────
-
-  // Window control IPC
-  ipcMain.on('window:minimize', () => mainWindow?.minimize())
-  ipcMain.on('window:maximize', () => {
-    if (mainWindow?.isMaximized()) {
-      mainWindow.unmaximize()
-    } else {
-      mainWindow?.maximize()
-    }
-  })
-  ipcMain.on('window:close', () => mainWindow?.close())
-
-  // Load the renderer
   if (is.dev && process.env['ELECTRON_RENDERER_URL']) {
     mainWindow.loadURL(process.env['ELECTRON_RENDERER_URL'])
   } else {
@@ -114,25 +83,28 @@ function createWindow(): void {
 
 app.whenReady().then(() => {
   electronApp.setAppUserModelId('com.zetaai')
-
-  // Pre-load all saved API keys from vault into process.env
   preloadVaultKeys()
 
   app.on('browser-window-created', (_, window) => {
     optimizer.watchWindowShortcuts(window)
   })
 
-  createWindow()
+  // IPC window controls
+  ipcMain.on('window:minimize', () => mainWindow?.minimize())
+  ipcMain.on('window:maximize', () => {
+    if (mainWindow?.isMaximized()) mainWindow.unmaximize()
+    else mainWindow?.maximize()
+  })
+  ipcMain.on('window:close', () => mainWindow?.close())
 
-  app.on('activate', function () {
+  createWindow()
+  if (mainWindow) registerAllIpcHandlers(ipcMain, mainWindow)
+
+  app.on('activate', () => {
     if (BrowserWindow.getAllWindows().length === 0) createWindow()
   })
 })
 
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
-    app.quit()
-  }
+  if (process.platform !== 'darwin') app.quit()
 })
-
-export { mainWindow }

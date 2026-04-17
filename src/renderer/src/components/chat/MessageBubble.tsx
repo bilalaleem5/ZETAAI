@@ -3,7 +3,7 @@ import ReactMarkdown from 'react-markdown'
 import remarkGfm from 'remark-gfm'
 import { Prism as SyntaxHighlighter } from 'react-syntax-highlighter'
 import { oneDark } from 'react-syntax-highlighter/dist/esm/styles/prism'
-import { Copy, Check, Zap, User, FolderOpen, Globe, Brain, Code2 } from 'lucide-react'
+import { Copy, Check, Zap, User, FolderOpen, Globe, Brain, Code2, MessageSquare } from 'lucide-react'
 import { Message, AgentMode } from '../../store'
 
 interface Props {
@@ -17,7 +17,8 @@ const AGENT_COLORS: Record<AgentMode, string> = {
   web: '#10b981',
   rag: '#f59e0b',
   builder: '#ec4899',
-  os: '#ef4444'
+  os: '#ef4444',
+  chat: '#10b981'
 }
 
 const AGENT_ICONS: Record<AgentMode, React.ReactNode> = {
@@ -26,7 +27,8 @@ const AGENT_ICONS: Record<AgentMode, React.ReactNode> = {
   web: <Globe size={12} />,
   rag: <Brain size={12} />,
   builder: <FolderOpen size={12} />,
-  os: <Zap size={12} />
+  os: <Zap size={12} />,
+  chat: <MessageSquare size={12} />
 }
 
 function CopyButton({ text }: { text: string }): React.ReactElement {

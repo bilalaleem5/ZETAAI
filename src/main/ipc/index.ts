@@ -11,6 +11,7 @@ import { handleNews } from './handlers/newsHandler'
 import { handleCalendar, handleReminders } from './handlers/calendarHandler'
 import { handleOpenApp, handleCloseApp } from './handlers/appLauncherHandler'
 import { handleAudioTranscribe } from './handlers/audioHandler'
+import { registerMemoryHandlers } from './handlers/memoryHandler'
 
 export function registerAllIpcHandlers(ipcMain: IpcMain, mainWindow: BrowserWindow): void {
   // ─── Audio & Voice ────────────────────────────────────────────────────────
@@ -80,4 +81,7 @@ export function registerAllIpcHandlers(ipcMain: IpcMain, mainWindow: BrowserWind
   ipcMain.handle('reminder:complete', (_, payload) => handleReminders('complete', payload))
   ipcMain.handle('reminder:delete', (_, payload) => handleReminders('delete', payload))
   ipcMain.handle('reminder:upcoming', () => handleReminders('upcoming', {}))
+
+  // ─── Memory System (Tasks, CRM, Contacts, Drafts) ────────────────────────
+  registerMemoryHandlers(ipcMain)
 }

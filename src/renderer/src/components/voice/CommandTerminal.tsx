@@ -25,27 +25,28 @@ export function CommandTerminal({ mode, transcript, streamingText = '', lastResp
   const [booted, setBooted] = useState(false)
   const bottomRef = useRef<HTMLDivElement>(null)
 
-  // Boot sequence
+  const bootedRef = useRef(false)
   useEffect(() => {
+    if (bootedRef.current) return
+    bootedRef.current = true
+    const timers: ReturnType<typeof setTimeout>[] = []
     BOOT_LINES.forEach((line, i) => {
-      setTimeout(() => {
+      const t = setTimeout(() => {
         setLines(prev => [...prev, {
-          text: line.ok
-            ? `${line.text.padEnd(45, '.')} OK`
-            : line.text,
+          text: line.ok ? `${line.text.padEnd(45, '.')} OK` : line.text,
           type: line.ok ? 'boot' : 'system'
         }])
         if (i === BOOT_LINES.length - 1) {
-          setTimeout(() => {
-            setLines(prev => [...prev, {
-              text: 'ZETA  ○  Online. All neural cores active. How may I assist you?',
-              type: 'zeta'
-            }])
+          const t2 = setTimeout(() => {
+            setLines(prev => [...prev, { text: 'ZETA  ○  Online. All neural cores active. How may I assist you?', type: 'zeta' }])
             setBooted(true)
           }, 400)
+          timers.push(t2)
         }
       }, line.delay)
+      timers.push(t)
     })
+    return () => timers.forEach(clearTimeout)
   }, [])
 
   // Add transcript line

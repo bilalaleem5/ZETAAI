@@ -16,7 +16,7 @@ const zetaAPI = {
     chat: (payload: {
       message: string
       model: 'gemini' | 'groq'
-      agentMode: 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os'
+      agentMode: 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os' | 'chat'
       conversationHistory: Array<{ role: string; content: string }>
       context?: Record<string, unknown>
     }) => ipcRenderer.invoke('agent:chat', payload),
@@ -129,6 +129,57 @@ const zetaAPI = {
     complete: (id: string) => ipcRenderer.invoke('reminder:complete', { id }),
     delete: (id: string) => ipcRenderer.invoke('reminder:delete', { id }),
     upcoming: () => ipcRenderer.invoke('reminder:upcoming')
+  },
+
+  // ── Memory System (Tasks, CRM, Contacts, Drafts) ─────────────────────────
+  memory: {
+    // Tasks
+    addTask: (title: string, opts?: { description?: string; deadline?: string; priority?: string; tags?: string[] }) =>
+      ipcRenderer.invoke('memory:add-task', { title, ...opts }),
+    completeTask: (taskId: string) => ipcRenderer.invoke('memory:complete-task', { taskId }),
+    listTasks: (filter?: { status?: string; priority?: string }) =>
+      ipcRenderer.invoke('memory:list-tasks', filter || {}),
+    rescheduleTask: (taskId: string, newDeadline: string) =>
+      ipcRenderer.invoke('memory:reschedule-task', { taskId, newDeadline }),
+    deleteTask: (taskId: string) => ipcRenderer.invoke('memory:delete-task', { taskId }),
+    taskSummary: () => ipcRenderer.invoke('memory:task-summary'),
+
+    // Contacts
+    addContact: (name: string, opts?: { email?: string; phone?: string; company?: string; whatsapp?: string }) =>
+      ipcRenderer.invoke('memory:add-contact', { name, ...opts }),
+    listContacts: (query?: string) => ipcRenderer.invoke('memory:list-contacts', { query }),
+    updateContact: (id: string, updates: Record<string, unknown>) =>
+      ipcRenderer.invoke('memory:update-contact', { id, updates }),
+    deleteContact: (id: string) => ipcRenderer.invoke('memory:delete-contact', { id }),
+
+    // Leads / CRM
+    addLead: (data: { name: string; company?: string; role?: string; email?: string; source: string; status?: string }) =>
+      ipcRenderer.invoke('memory:add-lead', data),
+    listLeads: (filter?: { status?: string; query?: string }) =>
+      ipcRenderer.invoke('memory:list-leads', filter || {}),
+    updateLead: (id: string, updates: Record<string, unknown>) =>
+      ipcRenderer.invoke('memory:update-lead', { id, updates }),
+    deleteLead: (id: string) => ipcRenderer.invoke('memory:delete-lead', { id }),
+    leadSummary: () => ipcRenderer.invoke('memory:lead-summary'),
+
+    // Drafts
+    addDraft: (data: { type: 'email' | 'whatsapp'; to: string; subject?: string; body: string }) =>
+      ipcRenderer.invoke('memory:add-draft', data),
+    listDrafts: (filter?: { type?: string; status?: string }) =>
+      ipcRenderer.invoke('memory:list-drafts', filter || {}),
+    approveDraft: (id: string) => ipcRenderer.invoke('memory:approve-draft', { id }),
+    deleteDraft: (id: string) => ipcRenderer.invoke('memory:delete-draft', { id }),
+
+    // Context & Briefing
+    fullContext: () => ipcRenderer.invoke('memory:full-context'),
+    dailyBriefing: () => ipcRenderer.invoke('memory:daily-briefing'),
+    history: (count?: number, category?: string) =>
+      ipcRenderer.invoke('memory:history', { count, category }),
+
+    // Preferences
+    setPreference: (key: string, value: unknown) =>
+      ipcRenderer.invoke('memory:set-preference', { key, value }),
+    getPreference: (key: string) => ipcRenderer.invoke('memory:get-preference', { key })
   }
 }
 

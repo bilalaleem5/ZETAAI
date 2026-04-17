@@ -23,23 +23,8 @@ export function ChatInput({ onSend, isStreaming }: Props): React.ReactElement {
   const textareaRef = useRef<HTMLTextAreaElement>(null)
   const { agentMode } = useSettingsStore()
 
-  const handleTranscript = useCallback((text: string) => {
-    setValue(text)
-    // Auto-send voice commands
-    setTimeout(() => {
-      if (text.trim()) {
-        onSend(text.trim())
-        setValue('')
-      }
-    }, 300)
-  }, [onSend])
-
-  const { state: voiceState, toggle: toggleVoice, isSupported: voiceSupported } = useVoice({
-    onTranscript: handleTranscript,
-    language: 'en-US',
-    autoSpeak: false // ChatInput only captures, VoiceAssistant handles TTS
-  })
-
+  // Use the ACTUAL useVoice API (no config object)
+  const { state: voiceState, listen, stop: stopVoice, isSupported: voiceSupported } = useVoice()
   const isListening = voiceState === 'listening'
 
   const handleSend = useCallback(() => {
@@ -49,6 +34,23 @@ export function ChatInput({ onSend, isStreaming }: Props): React.ReactElement {
     setValue('')
     if (textareaRef.current) textareaRef.current.style.height = 'auto'
   }, [value, isStreaming, onSend])
+
+  const toggleVoice = useCallback(() => {
+    if (isListening) {
+      stopVoice()
+    } else {
+      listen((text: string) => {
+        if (text.trim()) {
+          setValue(text)
+          // Auto-send voice commands
+          setTimeout(() => {
+            onSend(text.trim())
+            setValue('')
+          }, 300)
+        }
+      })
+    }
+  }, [isListening, listen, stopVoice, onSend])
 
   const handleKeyDown = (e: KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Enter' && !e.shiftKey) {

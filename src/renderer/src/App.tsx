@@ -97,7 +97,11 @@ export default function App(): React.ReactElement {
   )
 }
 
+/**
+ * ChatWrapper — Single source of useChat(). Passes sendMessage/isStreaming down.
+ * ChatView is now a pure presentation component — no duplicate hook calls.
+ */
 function ChatWrapper(): React.ReactElement {
-  useChat()
-  return <ChatView />
+  const { sendMessage, isStreaming } = useChat()
+  return <ChatView sendMessage={sendMessage} isStreaming={isStreaming} />
 }

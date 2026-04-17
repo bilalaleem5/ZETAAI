@@ -2,13 +2,20 @@ import React, { useEffect, useRef } from 'react'
 import { MessageBubble } from './MessageBubble'
 import { ChatInput } from './ChatInput'
 import { WelcomeScreen } from './WelcomeScreen'
-import { useChat } from '../../hooks/useChat'
 import { useChatStore } from '../../store'
 import { Zap } from 'lucide-react'
 
-export function ChatView(): React.ReactElement {
-  const { sendMessage, isStreaming } = useChat()
-  const messages = useChatStore((s) => s.getActiveMessages())
+interface ChatViewProps {
+  sendMessage: (msg: string) => void
+  isStreaming: boolean
+}
+
+export function ChatView({ sendMessage, isStreaming }: ChatViewProps): React.ReactElement {
+  // Read messages directly from store — NO useChat() here (prevents double instantiation)
+  const messages = useChatStore((s) => {
+    const conv = s.conversations.find(c => c.id === s.activeConversationId)
+    return conv?.messages ?? []
+  })
   const bottomRef = useRef<HTMLDivElement>(null)
 
   useEffect(() => {
