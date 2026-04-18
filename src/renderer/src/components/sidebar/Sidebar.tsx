@@ -58,7 +58,6 @@ const AGENTS: { mode: AgentMode; label: string; icon: React.ReactNode; color: st
 ]
 
 const MODELS: { id: AIModel; label: string; badge: string }[] = [
-  { id: 'gemini', label: 'Gemini 2.0 Flash', badge: 'Google' },
   { id: 'groq', label: 'Llama 3.3 70B', badge: 'Groq' }
 ]
 

@@ -50,7 +50,7 @@ export function useWeather(refreshInterval = 300_000) {
   const fetch = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await window.zeta.weather.current()
+      const res = await (window as any).zeta.weather.current()
       if (res.success && res.data) {
         setWeather(res.data as WeatherData)
         setError(null)
@@ -82,7 +82,7 @@ export function useNews(refreshInterval = 600_000) {
   const fetch = useCallback(async () => {
     try {
       setLoading(true)
-      const res = await window.zeta.news.headlines()
+      const res = await (window as any).zeta.news.headlines()
       if (res.success && res.data) {
         setNews(res.data as NewsArticle[])
         setError(null)
@@ -115,8 +115,8 @@ export function useReminders() {
     try {
       setLoading(true)
       const [remRes, evRes] = await Promise.all([
-        window.zeta.reminder.upcoming(),
-        window.zeta.calendar.today()
+        (window as any).zeta.reminders.upcoming(),
+        (window as any).zeta.calendar.today()
       ])
       if (remRes.success) setReminders((remRes.data as Reminder[]) || [])
       if (evRes.success) setEvents((evRes.data as CalendarEvent[]) || [])
@@ -134,12 +134,12 @@ export function useReminders() {
   }, [refresh])
 
   const complete = useCallback(async (id: string) => {
-    await window.zeta.reminder.complete(id)
+    await (window as any).zeta.reminders.complete(id)
     refresh()
   }, [refresh])
 
   const addReminder = useCallback(async (text: string, datetime: string) => {
-    await window.zeta.reminder.add(text, datetime)
+    await (window as any).zeta.reminders.add(text, datetime)
     refresh()
   }, [refresh])
 

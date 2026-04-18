@@ -36,7 +36,8 @@ const APP_MAP_WIN: Record<string, string> = {
   'task manager': 'start taskmgr',
   settings: 'start ms-settings:',
   control_panel: 'control',
-  'control panel': 'control'
+  'control panel': 'control',
+  browser: 'start https://google.com'
 }
 
 const APP_MAP_MAC: Record<string, string> = {
@@ -61,7 +62,8 @@ const APP_MAP_MAC: Record<string, string> = {
   messages: 'open -a Messages',
   music: 'open -a Music',
   photos: 'open -a Photos',
-  vlc: 'open -a VLC'
+  vlc: 'open -a VLC',
+  browser: 'open https://google.com'
 }
 
 const APP_MAP_LINUX: Record<string, string> = {
@@ -80,7 +82,8 @@ const APP_MAP_LINUX: Record<string, string> = {
   'file manager': 'nautilus &',
   vlc: 'vlc &',
   gedit: 'gedit &',
-  notepad: 'gedit &'
+  notepad: 'gedit &',
+  browser: 'xdg-open https://google.com &'
 }
 
 export async function handleOpenApp(appName: string): Promise<{

@@ -1,28 +1,27 @@
 /**
- * useVoice — Web SpeechRecognition STT + Web Speech TTS
+ * useVoice — Whisper STT + Web Speech TTS
  *
- * REBUILT: Added retry logic, Whisper fallback, isSupported export
+ * ARCHITECTURE: Chrome SpeechRecognition does NOT work in Electron
+ * (requires Google servers + SSL). We use MediaRecorder → base64 → Groq Whisper.
  *
- * Flow: listen() → SpeechRecognition → onResult(text) → execute(text)
+ * Flow: listen() → MediaRecorder → base64 → IPC audio:transcribe → Whisper → text
  *       speak(text) → SpeechSynthesis → onDone()
  */
 import { useState, useRef, useCallback, useEffect } from 'react'
 
 export type VoiceState = 'sleeping' | 'listening' | 'thinking' | 'speaking' | 'error'
 
-const SR = (window as any).SpeechRecognition || (window as any).webkitSpeechRecognition
-const MAX_RETRIES = 3
-
 export function useVoice() {
   const [state,      setState]      = useState<VoiceState>('sleeping')
   const [transcript, setTranscript] = useState('')
   const [volume,     setVolume]     = useState(0)
 
-  const recRef    = useRef<SpeechRecognition | null>(null)
-  const volCtx    = useRef<AudioContext | null>(null)
-  const volStream = useRef<MediaStream | null>(null)
-  const volAnim   = useRef<number | null>(null)
-  const retryCount = useRef(0)
+  const recorderRef = useRef<MediaRecorder | null>(null)
+  const streamRef   = useRef<MediaStream | null>(null)
+  const volCtx      = useRef<AudioContext | null>(null)
+  const volAnim     = useRef<number | null>(null)
+  const silenceRef  = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const analyserRef = useRef<AnalyserNode | null>(null)
 
   // Pre-load TTS voices on mount
   useEffect(() => {
@@ -33,205 +32,144 @@ export function useVoice() {
     return () => window.speechSynthesis.removeEventListener('voiceschanged', load)
   }, [])
 
-  // ── Volume visualizer ──────────────────────────────────────────────────────
+  // ── Volume + silence detection ──────────────────────────────────────────
   const stopVol = useCallback(() => {
-    if (volAnim.current)  { cancelAnimationFrame(volAnim.current); volAnim.current = null }
-    volStream.current?.getTracks().forEach(t => t.stop()); volStream.current = null
-    try { volCtx.current?.close() } catch {}; volCtx.current = null
+    if (volAnim.current) { cancelAnimationFrame(volAnim.current); volAnim.current = null }
+    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null }
     setVolume(0)
   }, [])
 
-  const startVol = useCallback(async () => {
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      volStream.current = stream
-      const ctx = new AudioContext(); volCtx.current = ctx
-      const analyser = ctx.createAnalyser(); analyser.fftSize = 256
-      ctx.createMediaStreamSource(stream).connect(analyser)
-      const data = new Uint8Array(analyser.frequencyBinCount)
-      const tick = () => {
-        analyser.getByteFrequencyData(data)
-        setVolume(Math.min(data.reduce((a, b) => a + b, 0) / data.length / 60, 1))
-        volAnim.current = requestAnimationFrame(tick)
-      }
-      tick()
-    } catch { /* volume viz is optional */ }
-  }, [])
-
-  // ── Whisper STT Fallback ───────────────────────────────────────────────────
-  const whisperFallback = useCallback(async (onResult: (text: string) => void) => {
-    console.log('[Voice] Falling back to Whisper STT...')
+  // ── Listen (Whisper STT) ───────────────────────────────────────────────
+  const listen = useCallback((onResult: (text: string) => void) => {
+    console.log('[Voice] 🎤 Starting Whisper STT listen...')
+    setTranscript('')
     setState('listening')
-    startVol()
 
-    try {
-      const stream = await navigator.mediaDevices.getUserMedia({ audio: true })
-      const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
-      const chunks: Blob[] = []
+    // Get microphone
+    navigator.mediaDevices.getUserMedia({ audio: true })
+      .then(stream => {
+        streamRef.current = stream
 
-      recorder.ondataavailable = (e) => { if (e.data.size > 0) chunks.push(e.data) }
+        // Setup volume visualizer + silence detection
+        const ctx = new AudioContext()
+        volCtx.current = ctx
+        const analyser = ctx.createAnalyser()
+        analyser.fftSize = 256
+        analyser.smoothingTimeConstant = 0.3
+        ctx.createMediaStreamSource(stream).connect(analyser)
+        analyserRef.current = analyser
+        const data = new Uint8Array(analyser.frequencyBinCount)
 
-      recorder.onstop = async () => {
-        stream.getTracks().forEach(t => t.stop())
-        stopVol()
-        if (chunks.length === 0) { setState('sleeping'); return }
+        let speechDetected = false
+        let silenceCount = 0
+        const SILENCE_THRESHOLD = 15
+        const SILENCE_FRAMES = 45  // ~750ms of silence to auto-stop
 
-        setState('thinking')
-        const blob = new Blob(chunks, { type: 'audio/webm' })
-        const reader = new FileReader()
-        reader.onloadend = async () => {
-          try {
-            const base64 = (reader.result as string).split(',')[1]
-            const result = await (window as any).zeta.audio.transcribe(base64)
-            if (result?.success && result.text?.trim()) {
-              const text = result.text.trim()
-              setTranscript(text)
-              console.log('[Voice] Whisper result:', text)
-              onResult(text)
-            } else {
-              console.warn('[Voice] Whisper returned empty')
+        const tick = () => {
+          analyser.getByteFrequencyData(data)
+          const avg = data.reduce((a, b) => a + b, 0) / data.length
+          setVolume(Math.min(avg / 60, 1))
+
+          if (avg > SILENCE_THRESHOLD) {
+            speechDetected = true
+            silenceCount = 0
+          } else if (speechDetected) {
+            silenceCount++
+            if (silenceCount > SILENCE_FRAMES) {
+              // Auto-stop after silence
+              console.log('[Voice] Silence detected, stopping recording...')
+              stopRecording()
+              return
+            }
+          }
+          volAnim.current = requestAnimationFrame(tick)
+        }
+        tick()
+
+        // Start recording
+        const recorder = new MediaRecorder(stream, { mimeType: 'audio/webm' })
+        const chunks: Blob[] = []
+        recorder.ondataavailable = e => { if (e.data.size > 0) chunks.push(e.data) }
+        recorder.onstop = async () => {
+          // Cleanup volume
+          stopVol()
+          streamRef.current?.getTracks().forEach(t => t.stop())
+          streamRef.current = null
+          try { volCtx.current?.close() } catch {}
+          volCtx.current = null
+
+          const blob = new Blob(chunks, { type: 'audio/webm' })
+          console.log('[Voice] Recording stopped, size:', blob.size)
+
+          if (blob.size < 1000) {
+            console.warn('[Voice] Recording too short')
+            setState('sleeping')
+            return
+          }
+
+          setState('thinking')
+          setTranscript('Transcribing...')
+
+          // Convert to base64 and send to Whisper
+          const reader = new FileReader()
+          reader.onloadend = async () => {
+            const b64 = (reader.result as string).split(',')[1]
+            if (!b64) { setState('sleeping'); setTranscript(''); return }
+
+            try {
+              const zeta = (window as any).zeta
+              if (!zeta?.audio?.transcribe) {
+                console.error('[Voice] zeta.audio.transcribe not available')
+                setState('sleeping'); setTranscript('')
+                return
+              }
+              const res = await zeta.audio.transcribe(b64)
+              if (res?.success && res.text?.trim()) {
+                const text = res.text.trim()
+                console.log('[Voice] ✅ Whisper:', text)
+                setTranscript(text)
+                onResult(text)
+              } else {
+                console.warn('[Voice] Whisper empty response')
+                setState('sleeping')
+                setTranscript('')
+              }
+            } catch (e) {
+              console.error('[Voice] Whisper error:', e)
               setState('sleeping')
               setTranscript('')
             }
-          } catch (err) {
-            console.error('[Voice] Whisper error:', err)
-            setState('sleeping')
-            setTranscript('')
           }
+          reader.readAsDataURL(blob)
         }
-        reader.readAsDataURL(blob)
-      }
 
-      recorder.start()
-      // Auto-stop after 8 seconds
-      setTimeout(() => {
-        if (recorder.state === 'recording') recorder.stop()
-      }, 8000)
-    } catch (err) {
-      console.error('[Voice] Whisper fallback failed:', err)
-      stopVol()
-      setState('sleeping')
-    }
-  }, [startVol, stopVol])
+        recorderRef.current = recorder
+        recorder.start()
+        console.log('[Voice] ✅ Recording started')
 
-  // ── Listen (SpeechRecognition with retry + Whisper fallback) ───────────────
-  const listen = useCallback((onResult: (text: string) => void) => {
-    if (!SR) {
-      console.warn('[Voice] SpeechRecognition not supported, using Whisper fallback')
-      whisperFallback(onResult)
-      return
-    }
-
-    // Stop any existing session
-    try { recRef.current?.abort() } catch {}
-    recRef.current = null
-    setTranscript('')
-    setState('listening')
-    startVol()
-
-    console.log('[Voice] Starting SpeechRecognition...')
-
-    // Small gap ensures any previous recognition session fully closed
-    setTimeout(() => {
-      const rec = new SR() as SpeechRecognition
-      rec.lang            = 'en-US'
-      rec.continuous      = false
-      rec.interimResults  = true
-      rec.maxAlternatives = 3
-
-      let finalText  = ''
-      let interimText = ''
-      let silenceTimer: ReturnType<typeof setTimeout> | null = null
-
-      rec.onstart = () => {
-        recRef.current = rec
-        retryCount.current = 0 // reset retries on successful start
-        console.log('[Voice] ✅ SpeechRecognition started')
-      }
-
-      rec.onresult = (e: SpeechRecognitionEvent) => {
-        finalText = ''; interimText = ''
-        for (let i = 0; i < e.results.length; i++) {
-          const t = e.results[i][0].transcript
-          e.results[i].isFinal ? (finalText += t) : (interimText = t)
-        }
-        setTranscript(finalText || interimText)
-        console.log('[Voice] onresult:', finalText || interimText)
-
-        if (silenceTimer) clearTimeout(silenceTimer)
-        silenceTimer = setTimeout(() => {
-          try { rec.stop() } catch {}
-        }, 1500)
-      }
-
-      rec.onspeechend = () => {
-        console.log('[Voice] onspeechend')
-        if (silenceTimer) clearTimeout(silenceTimer)
-        try { rec.stop() } catch {}
-      }
-
-      rec.onend = () => {
-        console.log('[Voice] onend → final:', `"${finalText}"`, 'interim:', `"${interimText}"`)
-        if (silenceTimer) clearTimeout(silenceTimer)
-        stopVol()
-        recRef.current = null
-
-        const text = (finalText || interimText).trim()
-        if (text) {
-          setTranscript(text)
-          setState('thinking')
-          console.log('[Voice] ✅ Sending to AI:', text)
-          onResult(text)
-        } else {
-          console.warn('[Voice] No speech detected')
-          setState('sleeping')
-          setTranscript('')
-        }
-      }
-
-      rec.onerror = (e: SpeechRecognitionErrorEvent) => {
-        console.error('[Voice] SpeechRecognition error:', e.error, e.message)
-        if (silenceTimer) clearTimeout(silenceTimer)
-        stopVol()
-        recRef.current = null
-
-        if (e.error === 'network') {
-          retryCount.current++
-          if (retryCount.current <= MAX_RETRIES) {
-            console.log(`[Voice] Network error, retry ${retryCount.current}/${MAX_RETRIES}...`)
-            const delay = Math.pow(2, retryCount.current) * 500
-            setTimeout(() => listen(onResult), delay)
-            return
+        // Safety: max 12 seconds recording
+        silenceRef.current = setTimeout(() => {
+          if (recorder.state === 'recording') {
+            console.log('[Voice] Max duration reached, stopping...')
+            stopRecording()
           }
-          // All retries exhausted, try Whisper
-          console.log('[Voice] All retries exhausted, falling back to Whisper')
-          whisperFallback(onResult)
-          return
-        }
+        }, 12000)
 
-        if (e.error === 'no-speech') {
-          // User didn't speak — not an error, just go back to sleep
-          setState('sleeping')
-          setTranscript('')
-          return
+        function stopRecording() {
+          if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null }
+          if (volAnim.current) { cancelAnimationFrame(volAnim.current); volAnim.current = null }
+          try {
+            if (recorder.state === 'recording') recorder.stop()
+          } catch {}
         }
-
+      })
+      .catch(e => {
+        console.error('[Voice] Mic access denied:', e)
         setState('sleeping')
-        setTranscript('')
-      }
+      })
+  }, [stopVol])
 
-      try {
-        rec.start()
-      } catch (err) {
-        console.error('[Voice] rec.start() threw:', err)
-        stopVol()
-        // Try Whisper as fallback
-        whisperFallback(onResult)
-      }
-    }, 250)
-  }, [startVol, stopVol, whisperFallback])
-
-  // ── Speak (SpeechSynthesis TTS) ────────────────────────────────────────────
+  // ── Speak (SpeechSynthesis TTS) ────────────────────────────────────────
   const speak = useCallback((text: string, onDone?: () => void) => {
     try { window.speechSynthesis.cancel() } catch {}
     setState('speaking')
@@ -243,7 +181,7 @@ export function useVoice() {
       .replace(/\*\*([^*]+)\*\*/g, '$1')
       .replace(/\*([^*]+)\*/g, '$1')
       .replace(/#{1,6} /g, '')
-      .replace(/[🔑⚠️✅❌📅🌤️📰🎯🤖💬🔔📋📌📩💡📧👤▶️⏹️🌐]/g, '')
+      .replace(/[🔑⚠️✅❌📅🌤️📰🎯🤖💬🔔📋📩📊⏰💼🧠🧑‍💻🌐]/g, '')
       .replace(/\[([^\]]+)\]\([^)]+\)/g, '$1')
       .replace(/\n+/g, '. ')
       .replace(/\s+/g, ' ')
@@ -296,17 +234,20 @@ export function useVoice() {
     }
   }, [])
 
-  // ── Stop everything ────────────────────────────────────────────────────────
+  // ── Stop everything ──────────────────────────────────────────────────────
   const stop = useCallback(() => {
-    try { recRef.current?.abort() } catch {}
-    recRef.current = null
+    try { recorderRef.current?.stop() } catch {}
+    recorderRef.current = null
+    streamRef.current?.getTracks().forEach(t => t.stop())
+    streamRef.current = null
     try { window.speechSynthesis.cancel() } catch {}
     stopVol()
+    try { volCtx.current?.close() } catch {}
+    volCtx.current = null
+    if (silenceRef.current) { clearTimeout(silenceRef.current); silenceRef.current = null }
     setState('sleeping')
     setTranscript('')
   }, [stopVol])
 
-  const isSupported = !!SR || !!(window as any).zeta?.audio?.transcribe
-
-  return { state, setState, transcript, volume, listen, speak, stop, isSupported }
+  return { state, setState, transcript, volume, listen, speak, stop }
 }

@@ -8,7 +8,7 @@ import { ConversationAgent } from '../../agents/conversationAgent'
 
 export interface AgentPayload {
   message: string
-  model: 'gemini' | 'groq'
+  model: 'groq'
   agentMode: 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os' | 'chat'
   conversationHistory: Array<{ role: string; content: string }>
   context?: Record<string, unknown>
@@ -31,7 +31,6 @@ export async function handleAgentChat(payload: AgentPayload, win: BrowserWindow)
       case 'rag':     result = await RAGMemoryAgent.run({ message, model, history: conversationHistory, onToken: tok }); break
       case 'builder': result = await WebsiteBuilderAgent.run({ message, model, history: conversationHistory, onToken: tok }); break
       case 'chat':    result = await ConversationAgent.run({ message, model, history: conversationHistory, onToken: tok }); break
-      case 'os':      result = await OrchestratorAgent.run({ message, model, history: conversationHistory, context: context || {}, onToken: tok }); break
       default:        result = await OrchestratorAgent.run({ message, model, history: conversationHistory, context: context || {}, onToken: tok }); break
     }
     done()

@@ -1,5 +1,6 @@
 import { app, shell, BrowserWindow, ipcMain, nativeTheme, safeStorage } from 'electron'
-import { join } from 'path'
+import { join, resolve } from 'path'
+import { existsSync } from 'fs'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import { config } from 'dotenv'
 import { registerAllIpcHandlers } from './ipc/index'
@@ -11,7 +12,27 @@ app.commandLine.appendSwitch('ignore-ssl-errors')
 app.commandLine.appendSwitch('allow-running-insecure-content')
 // ─────────────────────────────────────────────────────────────────────────────
 
-config()
+// Load .env from multiple candidate paths (CWD may not be project root in Electron)
+const envCandidates = [
+  resolve(process.cwd(), '.env'),
+  resolve(__dirname, '..', '..', '.env'),       // dev: out/main/../../.env
+  resolve(__dirname, '..', '..', '..', '.env'),  // packaged builds
+  resolve(app.getAppPath(), '.env'),
+  resolve(app.getAppPath(), '..', '.env'),
+]
+let envLoaded = false
+for (const p of envCandidates) {
+  if (existsSync(p)) {
+    config({ path: p })
+    console.log('[Env] Loaded from:', p)
+    envLoaded = true
+    break
+  }
+}
+if (!envLoaded) {
+  config() // fallback: default dotenv behavior
+  console.warn('[Env] No .env file found, using vault/env vars only')
+}
 
 function preloadVaultKeys(): void {
   try {

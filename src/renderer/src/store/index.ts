@@ -3,7 +3,7 @@ import { persist } from 'zustand/middleware'
 
 // ─── Types ────────────────────────────────────────────────────────────────────
 export type AgentMode = 'auto' | 'coder' | 'web' | 'rag' | 'builder' | 'os' | 'chat'
-export type AIModel = 'gemini' | 'groq'
+export type AIModel = 'groq'
 
 export interface Message {
   id: string

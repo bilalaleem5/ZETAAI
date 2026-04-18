@@ -15,13 +15,6 @@ interface ApiKey {
 
 const API_KEYS: ApiKey[] = [
   {
-    key: 'GEMINI_API_KEY',
-    label: 'Google Gemini API Key',
-    placeholder: 'AIza...',
-    hint: 'Powers Gemini 2.0 Flash — fast and capable',
-    link: 'https://aistudio.google.com/app/apikey'
-  },
-  {
     key: 'GROQ_API_KEY',
     label: 'Groq API Key',
     placeholder: 'gsk_...',
@@ -66,19 +59,21 @@ export function SettingsModal(): React.ReactElement {
   const [ragResult, setRagResult] = useState<{ files: number; chunks: number } | null>(null)
 
   useEffect(() => {
-    // Load saved key names
-    window.zeta.vault.listKeys().then((res) => {
-      if (res.success && res.data) {
-        setSavedKeys(res.data as string[])
-      }
-    })
+    // Load saved key names (guard: preload bridge may not be ready)
+    try {
+      (window as any).zeta?.vault?.list?.()?.then?.((res: any) => {
+        if (res?.success && Array.isArray(res.data)) {
+          setSavedKeys(res.data as string[])
+        }
+      })?.catch?.(() => {})
+    } catch {}
   }, [])
 
   const handleSaveKey = async (keyName: string) => {
     const val = keyValues[keyName]
     if (!val?.trim()) return
     setSaving(keyName)
-    const res = await window.zeta.vault.setKey(keyName, val.trim())
+    const res = await (window as any).zeta.vault.set(keyName, val.trim())
     setSaving(null)
     if (res.success) {
       setSaved(keyName)
@@ -88,7 +83,7 @@ export function SettingsModal(): React.ReactElement {
   }
 
   const handleDeleteKey = async (keyName: string) => {
-    await window.zeta.vault.deleteKey(keyName)
+    await (window as any).zeta.vault.delete(keyName)
     setSavedKeys((prev) => prev.filter((k) => k !== keyName))
     setKeyValues((prev) => ({ ...prev, [keyName]: '' }))
   }
@@ -100,7 +95,7 @@ export function SettingsModal(): React.ReactElement {
     try {
       const isFile = ragPath.includes('.')
       const payload = isFile ? { filePath: ragPath } : { dirPath: ragPath }
-      const res = await window.zeta.rag.ingest(payload)
+      const res = await (window as any).zeta.rag.ingest(payload)
       if (res.success && res.data) {
         const d = res.data as { ingested: number; files: number }
         setRagResult({ chunks: d.ingested, files: d.files })
@@ -112,7 +107,7 @@ export function SettingsModal(): React.ReactElement {
   }
 
   const handleClearRag = async () => {
-    await window.zeta.rag.clear()
+    await (window as any).zeta.rag.clear()
     setRagResult(null)
     setRagIndexed(false)
   }
@@ -330,7 +325,7 @@ export function SettingsModal(): React.ReactElement {
 
               {[
                 ['Architecture', 'Electron + React + TypeScript'],
-                ['AI Models', 'Gemini 2.0 Flash / Llama 3.3 70B'],
+                ['AI Models', 'Llama 3.3 70B (Groq)'],
                 ['OS Control', 'nut.js · Puppeteer · screenshot-desktop'],
                 ['Memory', 'Vector embeddings · cosine similarity'],
                 ['Security', 'OS keychain · zero external storage'],
